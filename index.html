@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hax CLI Web Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .claude-btn {
+            background-color: #6d28d9;
+            color: white;
+        }
+        .claude-btn:hover {
+            background-color: #5b21b6;
+        }
+        .icds-btn {
+            background-color: #2563eb;
+            color: white;
+        }
+        .icds-btn:hover {
+            background-color: #1d4ed8;
+        }
+        #result {
+            margin-top: 30px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            display: none;
+        }
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .error {
+            color: #e11d48;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .success {
+            color: #059669;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hax CLI Web Interface</h1>
+    
+    <div class="form-group">
+        <label for="query">Enter your Hax CLI request:</label>
+        <input type="text" id="query" placeholder="e.g., create a new site called portfolio" autofocus>
+    </div>
+    
+    <div class="button-group">
+        <button class="claude-btn" onclick="sendRequest('Claude')">Send to Claude</button>
+        <button class="icds-btn" onclick="sendRequest('ICDS')">Send to ICDS</button>
+        <span id="loading" class="loading" style="display: none;">Processing request...</span>
+    </div>
+    
+    <div id="status"></div>
+    <pre id="result"></pre>
+    
+    <script>
+        async function sendRequest(engine) {
+            const query = document.getElementById('query').value.trim();
+            
+            if (!query) {
+                document.getElementById('status').innerHTML = '<p class="error">Please enter a query.</p>';
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('loading').style.display = 'inline-block';
+            document.getElementById('status').innerHTML = '';
+            document.getElementById('result').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/hax-cli', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        engine: engine
+                    }),
+                });
+                
+                // Hide loading indicator
+                document.getElementById('loading').style.display = 'none';
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to process request');
+                }
+                
+                const data = await response.json();
+                
+                // Display results
+                document.getElementById('status').innerHTML = `<p class="success">Request processed successfully using ${engine}!</p>`;
+                document.getElementById('result').textContent = formatResult(data);
+                document.getElementById('result').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('status').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        function formatResult(data) {
+            let result = '=== EXPLANATION ===\n';
+            result += data.explanation + '\n\n';
+            
+            result += '=== COMMANDS ===\n';
+            data.commands.forEach((command, index) => {
+                result += `${index + 1}. ${command}\n`;
+            });
+            
+            result += `\nConfidence: ${data.confidence.toFixed(2)}`;
+            
+            return result;
+        }
+        
+        // Allow pressing Enter to submit
+        document.getElementById('query').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                sendRequest('Claude');
+            }
+        });
+    </script>
+</body>
+</html>
