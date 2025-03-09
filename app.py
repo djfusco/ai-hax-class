@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup  # For HTML parsing
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -236,13 +236,11 @@ class HaxSiteWorkflow:
 
     def summarize_content(self, content: str) -> str:
         """Summarize HTML content into a concise query for YouTube search."""
-        # Strip HTML tags
         soup = BeautifulSoup(content, 'html.parser')
         text = soup.get_text(separator=" ").strip()
         if not text:
-            return "general educational content"  # Fallback if no content
+            return "general educational content"
 
-        # Use LLM to summarize into a short query
         prompt = f"""Given the following text, summarize it into a concise search query (max 5-10 words) for finding relevant educational YouTube videos. Focus on key topics or themes:
 
         {text}
@@ -258,9 +256,8 @@ class HaxSiteWorkflow:
             return message.content[0].text.strip()
         except Exception as e:
             console.print(f"[red]Error summarizing content: {str(e)}")
-            # Fallback: extract key phrases manually
             words = text.split()
-            key_phrases = " ".join([w for w in words if len(w) > 4][:5])  # Simple heuristic
+            key_phrases = " ".join([w for w in words if len(w) > 4][:5])
             return key_phrases or "general educational content"
 
     def validate_names(self, site_name: Optional[str], page_title: Optional[str]) -> None:
@@ -397,13 +394,12 @@ async def ask_ai_hax_cli(request: HaxCliRequest):
                 workflow.validate_names(None, title)
 
                 if "with video" in request.query.lower() and "about" in request.query.lower():
-                    # Wait for AI content, then summarize it for video search
                     if content:
                         video_topic = workflow.summarize_content(content)
                         console.print(f"[yellow]Summarized content for video search: {video_topic}")
                     else:
-                        video_topic = title if not parent else f"{parent} {title}"  # Fallback
-                    videos = get_top_educational_videos(video_topic, max_results=2)
+                        video_topic = title if not parent else f"{parent} {title}"
+                    videos = get_top_educational_videos(video_topic, max_results=3)  # Changed to 3
                     video_content = "".join(
                         f'<video-player source="{v["url"]}" title="{v["title"]}"></video-player>'
                         for v in videos
@@ -452,13 +448,12 @@ async def ask_ai_hax_cli(request: HaxCliRequest):
                 if not os.path.exists(page_file_path):
                     raise HTTPException(status_code=404, detail=f"Page file '{page_file_path}' not found")
 
-                # Extract existing content and summarize for video search
                 with open(page_file_path, 'r') as f:
                     existing_content = f.read()
                 video_topic = workflow.summarize_content(existing_content)
                 console.print(f"[yellow]Summarized existing content for video search: {video_topic}")
 
-                videos = get_top_educational_videos(video_topic, max_results=2)
+                videos = get_top_educational_videos(video_topic, max_results=3)  # Changed to 3
                 video_content = "\n".join(
                     f'<video-player source="{v["url"]}" title="{v["title"]}"></video-player>'
                     for v in videos
