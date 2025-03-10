@@ -154,7 +154,9 @@ class HaxSiteWorkflow:
                     system=self.create_system_prompt(),
                     messages=[{"role": "user", "content": f"Parse this request and generate complete response with titles and content if needed: {query}"}]
                 )
-                return self._parse_json_response(message.content[0].text)
+                raw_response = message.content[0].text
+                console.print(f"[yellow]Raw LLM response: {raw_response}")  # Log raw response for debugging
+                return self._parse_json_response(raw_response)
             except Exception as e:
                 error_msg = f"Error processing query with LLM: {str(e)}"
                 if console.is_terminal:
@@ -164,6 +166,7 @@ class HaxSiteWorkflow:
             try:
                 promptNew = f"Parse this request and generate complete response with titles and content if needed: {query}"
                 llmAnswer = ollama.invoke(promptNew)
+                console.print(f"[yellow]Raw LLM response: {llmAnswer}")
                 return json.loads(llmAnswer)
             except Exception as e:
                 error_msg = f"Error processing query with LLM: {str(e)}"
@@ -172,18 +175,25 @@ class HaxSiteWorkflow:
                 raise ValueError(error_msg)
 
     def _parse_json_response(self, response_text: str) -> Dict:
+        """Robustly parse JSON from LLM response, handling potential extra text."""
+        # Strip whitespace and any leading/trailing non-JSON content
+        response_text = response_text.strip()
         try:
             return json.loads(response_text)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Initial JSON parse failed: {str(e)}")
+            # Try to extract JSON with regex
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
+                json_str = json_match.group(0)
                 try:
-                    return json.loads(json_match.group(0))
-                except json.JSONDecodeError as e:
-                    console.print(f"[red]Failed to extract valid JSON from response: {response_text}")
-                    raise e
+                    return json.loads(json_str)
+                except json.JSONDecodeError as inner_e:
+                    console.print(f"[red]Failed to parse extracted JSON: {json_str}")
+                    console.print(f"[red]Error: {str(inner_e)}")
+                    raise ValueError(f"Failed to extract valid JSON from response: {response_text}")
             else:
-                console.print(f"[red]No JSON found in response: {response_text}")
+                console.print(f"[red]No JSON object found in response: {response_text}")
                 raise ValueError("Response does not contain valid JSON")
 
     def customize_content(self, parent_content: str, instruction: str) -> str:
@@ -399,7 +409,7 @@ async def ask_ai_hax_cli(request: HaxCliRequest):
                         console.print(f"[yellow]Summarized content for video search: {video_topic}")
                     else:
                         video_topic = title if not parent else f"{parent} {title}"
-                    videos = get_top_educational_videos(video_topic, max_results=3)  # Changed to 3
+                    videos = get_top_educational_videos(video_topic, max_results=3)
                     video_content = "".join(
                         f'<video-player source="{v["url"]}" title="{v["title"]}"></video-player>'
                         for v in videos
@@ -453,7 +463,7 @@ async def ask_ai_hax_cli(request: HaxCliRequest):
                 video_topic = workflow.summarize_content(existing_content)
                 console.print(f"[yellow]Summarized existing content for video search: {video_topic}")
 
-                videos = get_top_educational_videos(video_topic, max_results=3)  # Changed to 3
+                videos = get_top_educational_videos(video_topic, max_results=3)
                 video_content = "\n".join(
                     f'<video-player source="{v["url"]}" title="{v["title"]}"></video-player>'
                     for v in videos
