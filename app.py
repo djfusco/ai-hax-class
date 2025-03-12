@@ -290,59 +290,136 @@ def format_duration(seconds):
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes}:{seconds:02d}"
 
+#####
 def get_top_educational_videos(topic: str, max_results: int = 3, min_views: int = 1000) -> List[Dict]:
     if not Google_API_KEY:
         raise HTTPException(status_code=500, detail="Google API Key not configured")
+    
     youtube = build("youtube", "v3", developerKey=Google_API_KEY)
+    
+    # Fetch more videos initially to account for potential filtering
+    initial_max = max_results * 3  # Request more videos initially
+    
     search_response = youtube.search().list(
         q=f"{topic} tutorial explain concept",
         part="id,snippet",
-        maxResults=20,
+        maxResults=initial_max,
         type="video",
         videoDefinition="high",
         relevanceLanguage="en"
     ).execute()
+    
     video_ids = [item["id"]["videoId"] for item in search_response["items"]]
     channel_ids = list(set([item["snippet"]["channelId"] for item in search_response["items"]]))
-    channels_response = youtube.channels().list(part="statistics,snippet", id=",".join(channel_ids)).execute()
-    channel_info = {item["id"]: {"subscriber_count": int(item["statistics"].get("subscriberCount", 0)), "video_count": int(item["statistics"].get("videoCount", 0)), "channel_title": item["snippet"]["title"]} for item in channels_response["items"]}
-    video_response = youtube.videos().list(part="snippet,statistics,contentDetails", id=",".join(video_ids)).execute()
+    
+    channels_response = youtube.channels().list(
+        part="statistics,snippet", 
+        id=",".join(channel_ids)
+    ).execute()
+    
+    channel_info = {
+        item["id"]: {
+            "subscriber_count": int(item["statistics"].get("subscriberCount", 0)),
+            "video_count": int(item["statistics"].get("videoCount", 0)),
+            "channel_title": item["snippet"]["title"]
+        } 
+        for item in channels_response["items"]
+    }
+    
+    video_response = youtube.videos().list(
+        part="snippet,statistics,contentDetails", 
+        id=",".join(video_ids)
+    ).execute()
+    
     comments_data = {}
-    for video_id in video_ids:
+    valid_videos = []
+    
+    # Process videos one by one until we have enough
+    for item in video_response["items"]:
+        video_id = item["id"]
         try:
-            comments_response = youtube.commentThreads().list(part="snippet", videoId=video_id, maxResults=10, order="relevance").execute()
+            comments_response = youtube.commentThreads().list(
+                part="snippet", 
+                videoId=video_id, 
+                maxResults=10, 
+                order="relevance"
+            ).execute()
             comments_data[video_id] = comments_response.get("items", [])
-        except:
-            comments_data[video_id] = []
+            valid_videos.append(item)  # Only add videos without comment issues
+            if len(valid_videos) >= max_results:
+                break  # Stop once we have enough valid videos
+        except Exception as e:
+            # Skip videos with comment issues, log the error for debugging
+            error_message = str(e)
+            print(f"WARNING: Skipping video {video_id} due to: {error_message}")
+            continue
+    
     videos = []
     educational_keywords = ["learn", "tutorial", "explained", "understand", "guide", "how to", "concept", "lesson", "course", "education"]
-    for item in video_response["items"]:
+    
+    for item in valid_videos:
         title = item["snippet"]["title"]
         description = item["snippet"]["description"]
         video_id = item["id"]
         channel_id = item["snippet"]["channelId"]
         url = f"https://www.youtube.com/watch?v={video_id}"
+        
         like_count = int(item["statistics"].get("likeCount", 0))
         view_count = int(item["statistics"].get("viewCount", 0))
         comment_count = int(item["statistics"].get("commentCount", 0))
+        
         if view_count < min_views:
             continue
+            
         like_view_ratio = (like_count / view_count) if view_count > 0 else 0
         engagement_ratio = ((like_count + comment_count) / view_count) if view_count > 0 else 0
+        
         duration_seconds = parse_duration(item["contentDetails"]["duration"])
         publish_date = datetime.strptime(item["snippet"]["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
         days_since_publish = (datetime.now() - publish_date).days
         recency_score = max(0, 1 - (days_since_publish / 365))
-        educational_score = sum(0.2 if keyword.lower() in title.lower() else 0 + 0.1 if keyword.lower() in description.lower() else 0 for keyword in educational_keywords)
-        duration_score = 1 if 300 <= duration_seconds <= 1200 else duration_seconds / 300 if duration_seconds < 300 else max(0, 1 - ((duration_seconds - 1200) / 1800))
+        
+        educational_score = sum(
+            0.2 if keyword.lower() in title.lower() else 0 + 
+            0.1 if keyword.lower() in description.lower() else 0 
+            for keyword in educational_keywords
+        )
+        
+        duration_score = 1 if 300 <= duration_seconds <= 1200 else (
+            duration_seconds / 300 if duration_seconds < 300 else 
+            max(0, 1 - ((duration_seconds - 1200) / 1800))
+        )
+        
         channel_data = channel_info.get(channel_id, {})
-        channel_authority = min(1, (channel_data.get("subscriber_count", 0) / 1000000) * 0.5 + (min(channel_data.get("video_count", 0), 100) / 100) * 0.5)
+        channel_authority = min(
+            1, 
+            (channel_data.get("subscriber_count", 0) / 1000000) * 0.5 + 
+            (min(channel_data.get("video_count", 0), 100) / 100) * 0.5
+        )
+        
+        # Comment quality calculation - already verified these videos have accessible comments
         comment_quality_score = 0
-        if video_id in comments_data and comments_data[video_id]:
-            comment_texts = [c["snippet"]["topLevelComment"]["snippet"]["textDisplay"].lower() for c in comments_data[video_id]]
-            edu_keyword_count = sum(sum(1 for signal in ["understand", "helped", "learned", "clear", "thank", "great explanation"] if signal in comment) for comment in comment_texts)
-            comment_quality_score = min(1, edu_keyword_count / (len(comment_texts) * 2)) if comment_texts else 0
-        composite_score = (like_view_ratio * 0.3 + engagement_ratio * 0.15 + educational_score * 0.2 + duration_score * 0.1 + channel_authority * 0.15 + comment_quality_score * 0.05 + recency_score * 0.05)
+        comment_texts = [c["snippet"]["topLevelComment"]["snippet"]["textDisplay"].lower() 
+                         for c in comments_data.get(video_id, [])]
+        
+        if comment_texts:
+            edu_keyword_count = sum(
+                sum(1 for signal in ["understand", "helped", "learned", "clear", "thank", "great explanation"] 
+                    if signal in comment) 
+                for comment in comment_texts
+            )
+            comment_quality_score = min(1, edu_keyword_count / (len(comment_texts) * 2))
+        
+        composite_score = (
+            like_view_ratio * 0.3 + 
+            engagement_ratio * 0.15 + 
+            educational_score * 0.2 + 
+            duration_score * 0.1 + 
+            channel_authority * 0.15 + 
+            comment_quality_score * 0.05 + 
+            recency_score * 0.05
+        )
+        
         videos.append({
             "title": title,
             "url": url,
@@ -357,8 +434,16 @@ def get_top_educational_videos(topic: str, max_results: int = 3, min_views: int 
             "engagement_score": engagement_ratio,
             "composite_score": composite_score
         })
+    
+    # If after all filtering we still don't have enough videos, try a fallback approach
+    if len(videos) < max_results:
+        # We need to handle videos with disabled comments gracefully
+        # Fallback: Return what we have or make another attempt with relaxed constraints
+        print(f"WARNING: Only found {len(videos)} valid videos with comments enabled")
+    
     return sorted(videos, key=lambda x: x["composite_score"], reverse=True)[:max_results]
 
+#####
 @app.post("/api/hax-cli", response_model=WorkflowResponse)
 async def ask_ai_hax_cli(request: HaxCliRequest):
     workflow = HaxSiteWorkflow()
