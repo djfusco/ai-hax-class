@@ -91,7 +91,7 @@ class HaxSiteWorkflow:
         3. Add new page(s) with content:
         - Command: hax site node:add --title [pageTitle] --content [htmlContent] --y
         - Creates new page with provided content
-        - If "about [topic]" is in the query, generate three paragraphs about the topic
+        - If "about [topic]" is in the query, generate five paragraphs about the topic
         - If "with video" is in the query, include a placeholder for video content: <!-- VIDEO_PLACEHOLDER -->
 
         4. Add a child page under a parent page with content:
@@ -113,9 +113,17 @@ class HaxSiteWorkflow:
         - Command: hax site site:theme --theme "polaris-flex-theme"
 
         For content generation requests:
+        - Assume the person asking is a university professor looking to create a new general education course meant to serve all students
+        - The course title is Foundations in Artificial Intelligence Applications & Society
+
+        - The course description is as follows - all content generated should support this course description:
+        This introductory course provides students from all academic backgrounds with a comprehensive understanding of Artificial Intelligence (AI) through a social and behavioral sciences lens. Students will explore how AI systems influence human behavior, social institutions, and cultural practices. The course emphasizes the complex interrelationships between technology and society, examining the social, economic, political, and ethical implications of AI deployment across various contexts. Through hands-on experimentation and critical analysis, students will gain insight into how AI shapes and is shaped by human values, behaviors, and institutions.
+        
+        - Assume the student taking this course has no background in the topic being asked about
+        - Assume the content should use an instructional voice with factual information and helpful for a person wanting to learn about this topic
         - Identify if content creation is implied (e.g., "create a site about..." or "about [topic]")
         - Suggest appropriate page titles
-        - Generate three paragraphs of relevant content for each page in <p> tags
+        - Generate five paragraphs of relevant content for each page in <p> tags
         - If "with video" is specified in a creation request, append <!-- VIDEO_PLACEHOLDER -->
         - For update requests, do not generate content—just specify the page title
 
@@ -126,7 +134,7 @@ class HaxSiteWorkflow:
             "pages": [
                 {
                     "title": "page title",
-                    "content": "HTML formatted content with three paragraphs",  # For creation workflows
+                    "content": "HTML formatted content with five paragraphs",  # For creation workflows
                     "parent": "parent page title",
                     "customize_from_parent": true/false,
                     "customization_instruction": "how to adjust the parent content"
@@ -137,7 +145,7 @@ class HaxSiteWorkflow:
         }
 
         Rules for content generation:
-        - Three paragraphs, each in <p> tags (for creation workflows)
+        - Five paragraphs, each in <p> tags (for creation workflows)
         - Informative and factual
         - Use proper HTML formatting
         - Include <!-- VIDEO_PLACEHOLDER --> if "with video" is requested in creation workflows
@@ -148,7 +156,8 @@ class HaxSiteWorkflow:
         if engine == "Claude":
             try:
                 message = self.client.messages.create(
-                    model="claude-3-opus-20240229",
+                    #model="claude-3-opus-20240229",
+                    model="claude-3-7-sonnet-20250219",
                     max_tokens=2000,
                     temperature=0.7,
                     system=self.create_system_prompt(),
@@ -202,12 +211,22 @@ class HaxSiteWorkflow:
         {parent_content}
 
         Customize this content based on the following instruction: {instruction}.
-        Return *only* the customized content in HTML format with exactly three paragraphs, each wrapped in <p> tags.
-        Do not include any introductory text, headers, or additional sentences beyond the three paragraphs.
+        - Assume the person asking is a university student looking to create a new page based on the content provided but customized for their own interests
+        - The course title is Foundations in Artificial Intelligence Applications & Society
+
+        - The course description is as follows - all content generated should support this course description:
+        This introductory course provides students from all academic backgrounds with a comprehensive understanding of Artificial Intelligence (AI) through a social and behavioral sciences lens. Students will explore how AI systems influence human behavior, social institutions, and cultural practices. The course emphasizes the complex interrelationships between technology and society, examining the social, economic, political, and ethical implications of AI deployment across various contexts. Through hands-on experimentation and critical analysis, students will gain insight into how AI shapes and is shaped by human values, behaviors, and institutions.
+        
+        - Assume the student asking has no background in the topic being asked about
+        - Assume the content should use an instructional voice with factual information and helpful for a person wanting to learn about this topic
+
+        Return *only* the customized content in HTML format with exactly five paragraphs, each wrapped in <p> tags.
+        Do not include any introductory text, headers, or additional sentences beyond the five paragraphs.
         Ensure the content remains informative, factual, and relevant to the new title."""
         try:
             message = self.client.messages.create(
-                model="claude-3-opus-20240229",
+                #model="claude-3-opus-20240229",
+                model="claude-3-7-sonnet-20250219",
                 max_tokens=2000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -251,14 +270,29 @@ class HaxSiteWorkflow:
         if not text:
             return "general educational content"
 
-        prompt = f"""Given the following text, summarize it into a concise search query (max 5-10 words) for finding relevant educational YouTube videos. Focus on key topics or themes:
+        prompt = f"""
+        
+        I am a university student looking to find educational videos to help me better understand a topic.
+        I have the text of a page and I want you to find videos that help me understand this topic.
+
+        - Assume the person asking is a university student looking to find new videos based on the content provided
+        - The course title is Foundations in Artificial Intelligence Applications & Society
+
+        - The course description is as follows - all content generated should support this course description:
+        This introductory course provides students from all academic backgrounds with a comprehensive understanding of Artificial Intelligence (AI) through a social and behavioral sciences lens. Students will explore how AI systems influence human behavior, social institutions, and cultural practices. The course emphasizes the complex interrelationships between technology and society, examining the social, economic, political, and ethical implications of AI deployment across various contexts. Through hands-on experimentation and critical analysis, students will gain insight into how AI shapes and is shaped by human values, behaviors, and institutions.
+        
+        - Assume the student asking has no background in the topic being asked about
+        - Assume the content should use an instructional voice with factual information and helpful for a person wanting to learn about this topic
+        
+        Given the following text, summarize it into a concise search query (max 5-10 words) for finding relevant educational YouTube videos. Focus on key topics or themes:
 
         {text}
 
         Return *only* the summarized query, no extra text."""
         try:
             message = self.client.messages.create(
-                model="claude-3-opus-20240229",
+                #model="claude-3-opus-20240229",
+                model="claude-3-7-sonnet-20250219",
                 max_tokens=50,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -639,4 +673,4 @@ def health_check():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
