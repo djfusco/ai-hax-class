@@ -1,7 +1,7 @@
 import requests
 
-api_key = "AIzaSyB87XgaAX6o1hK0dcVPEAQpnZ0v-wDqZ7M"
-cse_id = "72c35ea430b66476f"
+api_key = ""
+cse_id = ""
 query = "ai in society"
 url = f"https://www.googleapis.com/customsearch/v1?key={api_key}&cx={cse_id}&q={query}&searchType=image&rights=cc_publicdomain%20cc_attribute%20cc_sharealike"
 
