@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup API Key</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            text-align: center;
+        }
+        input {
+            padding: 10px;
+            width: 80%;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Setup API Key</h1>
+    <p>Please enter your Anthropic API key to proceed:</p>
+    <form id="setup-form">
+        <input type="text" id="api-key" placeholder="Enter your API key" required>
+        <button type="submit">Save Key</button>
+    </form>
+    <p id="status" style="color: red;"></p>
+    <script>
+        document.getElementById("setup-form").addEventListener("submit", async function(event) {
+            event.preventDefault();
+            const apiKey = document.getElementById("api-key").value.trim();
+            const status = document.getElementById("status");
+            status.textContent = "";
+    
+            try {
+                const response = await fetch("/api/save-key", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: new URLSearchParams({ api_key: apiKey }),
+                });
+    
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "Failed to save API key");
+                }
+    
+                // Redirect to index.html after successful key save
+                window.location.href = "/";
+            } catch (error) {
+                status.textContent = error.message;
+            }
+        });
+    </script>
+</body>
+</html>
