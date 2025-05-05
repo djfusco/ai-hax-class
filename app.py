@@ -19,6 +19,11 @@ from fastapi.responses import HTMLResponse
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import RedirectResponse, HTMLResponse
+from dotenv import load_dotenv
+import os
+import pathlib
 
 load_dotenv()
 
@@ -35,6 +40,63 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+async def root():
+    load_dotenv(override=True)
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        print("Anthropic API key not set going to SETUP page")
+        return RedirectResponse(url="/setup")
+
+    print("Anthropic API key is set, going to INDEX page")
+    return RedirectResponse(url="/index")
+
+@app.get("/index")
+async def serve_index():
+    print("Serving index.html directly from /index")
+    index_path = pathlib.Path(__file__).parent / "index.html"
+    if index_path.exists():
+        return HTMLResponse(content=index_path.read_text())
+    return HTMLResponse("<h1>Error: index.html not found</h1>", status_code=404)
+
+@app.get("/setup")
+async def setup_page():
+    print("Serving setup.html")
+    setup_path = pathlib.Path(__file__).parent / "setup.html"
+    if setup_path.exists():
+        return HTMLResponse(content=setup_path.read_text())
+    return HTMLResponse("<h1>Error: setup.html not found</h1>", status_code=404)
+
+@app.post("/api/save-key")
+async def save_key(api_key: str = Form(...)):
+    print(f"Saving API key: {api_key}")
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        raise HTTPException(status_code=400, detail="Invalid API key")
+    
+    # Update the .env file
+    env_file_path = pathlib.Path(__file__).parent / ".env"
+    if not env_file_path.exists():
+        raise HTTPException(status_code=500, detail=".env file not found")
+    
+    with open(env_file_path, "r") as file:
+        lines = file.readlines()
+    
+    with open(env_file_path, "w") as file:
+        for line in lines:
+            if line.startswith("ANTHROPIC_API_KEY="):
+                file.write(f"ANTHROPIC_API_KEY={api_key}\n")
+            else:
+                file.write(line)
+    
+    # Reload updated .env
+    load_dotenv(override=True)
+    print("Anthropic API key saved and .env reloaded")
+
+
+
+
 
 client = QdrantClient(url="http://localhost:5903")
 ollama = Ollama(base_url="http://localhost:5904", model="mistral")
@@ -653,20 +715,20 @@ async def get_youtube_videos(request: YouTubeVideoRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching videos: {str(e)}")
 
-@app.get("/", response_class=HTMLResponse)
-async def get_html():
-    html_path = pathlib.Path("index.html")
-    if html_path.exists():
-        return html_path.read_text()
-    else:
-        return """
-        <html>
-            <body>
-                <h1>Error: HTML file not found</h1>
-                <p>The index.html file was not found. Please make sure it exists in the same directory as the app.py file.</p>
-            </body>
-        </html>
-        """
+# @app.get("/", response_class=HTMLResponse)
+# async def get_html():
+#     html_path = pathlib.Path("index.html")
+#     if html_path.exists():
+#         return html_path.read_text()
+#     else:
+#         return """
+#         <html>
+#             <body>
+#                 <h1>Error: HTML file not found</h1>
+#                 <p>The index.html file was not found. Please make sure it exists in the same directory as the app.py file.</p>
+#             </body>
+#         </html>
+#         """
 
 @app.get("/health")
 def health_check():

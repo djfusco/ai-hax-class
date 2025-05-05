@@ -59,6 +59,13 @@
         .icds-btn:hover {
             background-color: #1d4ed8;
         }
+        .change-key-btn {
+            background-color: #f59e0b;
+            color: white;
+        }
+        .change-key-btn:hover {
+            background-color: #d97706;
+        }
         #result {
             margin-top: 30px;
             border: 1px solid #ddd;
@@ -97,6 +104,7 @@
     <div class="button-group">
         <button class="claude-btn" onclick="sendRequest('Claude')">Send to Claude</button>
         <button class="icds-btn" onclick="sendRequest('ICDS')">Send to ICDS</button>
+        <button class="change-key-btn" onclick="changeKey()">Change Key</button>
         <span id="loading" class="loading" style="display: none;">Processing request...</span>
     </div>
     
@@ -134,7 +142,12 @@
                 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to process request');
+                    if (errorData.detail && errorData.detail.includes("key")) {
+                        document.getElementById('status').innerHTML = `<p class="error">API Key Error: ${errorData.detail}</p>`;
+                    } else {
+                        throw new Error(errorData.detail || 'Failed to process request');
+                    }
+                    return;
                 }
                 
                 const data = await response.json();
@@ -169,6 +182,11 @@
                 sendRequest('Claude');
             }
         });
+
+        // Redirect to /setup to change the API key
+        function changeKey() {
+            window.location.href = "/setup";
+        }
     </script>
 </body>
 </html>

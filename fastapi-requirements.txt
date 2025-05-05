@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+qdrant-client
+langchain-community
+anthropic
+python-dotenv
+aiofiles
+google-api-python-client
+beautifulsoup4
+rich
+python-multipart

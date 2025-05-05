@@ -1,6 +1,5 @@
 .venv/
 .DS_Store
-.env
 site/
 venv/
 *.pyc
